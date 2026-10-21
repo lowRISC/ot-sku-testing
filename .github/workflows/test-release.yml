@@ -1,0 +1,148 @@
+# Copyright lowRISC contributors (OpenTitan project).
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# This release test workflow is not meant to be run directly on the ot-sku repository
+# since it creates testing branches and releases. Instead, test-release-ci.yml triggers
+# a cross-ci run on lowRISC/ot-sku-testing which will replicate the content of the ot-sku
+# repository and then run this workflow on ot-sku-testing.
+name: Test release workflow
+on:
+  workflow_dispatch:
+    inputs:
+      testing_branch:
+        description: Name of the testing branch to run the flow on
+        type: string
+
+jobs:
+  e2e_release_test:
+    name: Test release workflow
+    runs-on: ubuntu-24.04
+    permissions:
+      # Used to trigger the test release flow.
+      actions: write
+    steps:
+      - name: Setup
+        id: setup
+        env:
+          TESTING_BRANCH: ${{ inputs.testing_branch }}
+        run: |
+          # Compute parameters for the presign
+          echo "presign_release_tag=PRESIGN_RELEASE_$(echo "$TESTING_BRANCH" | awk '{print toupper($0)}')" >> $GITHUB_OUTPUT
+          echo "presign_branch=presign_branch_$TESTING_BRANCH" >> $GITHUB_OUTPUT
+          echo "postsign_release_tag=FINAL_RELEASE_$(echo "$TESTING_BRANCH" | awk '{print toupper($0)}')" >> $GITHUB_OUTPUT
+          echo "postsign_branch=postsign_branch_$TESTING_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Run pre-sign
+        id: presign
+        env:
+          # We need a token with sufficient privilege to trigger a workflow dispatch.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TESTING_BRANCH: ${{ inputs.testing_branch }}
+          RELEASE_TAG: ${{ steps.setup.outputs.presign_release_tag }}
+          CREATE_BRANCH: ${{ steps.setup.outputs.presign_branch }}
+        run: |
+          set -e
+          echo "workflow_info<<EOF" >> $GITHUB_OUTPUT
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            "/repos/${{ github.repository }}/actions/workflows/pre-sign-release.yml/dispatches" \
+            -f "ref=refs/heads/$TESTING_BRANCH" \
+            -f "inputs[release_tag]=$RELEASE_TAG" \
+            -f "inputs[create_branch]=$CREATE_BRANCH" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Display pre-sign workflow link
+        env:
+          PRESIGN_WORKFLOW_URL: ${{ fromJSON(steps.presign.outputs.workflow_info).html_url }}
+        run: |
+          echo "Pre-sign release workflow: $PRESIGN_WORKFLOW_URL" >> $GITHUB_STEP_SUMMARY
+
+      - name: Wait for pre-sign to finish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRESIGN_WORKFLOW_RUNID: ${{ fromJSON(steps.presign.outputs.workflow_info).workflow_run_id }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          # Sometimes, despite the REST API returning a URL and a run ID, immediately asking Github about
+          # the status of the run will fail with a 500 error. Experimentally, wait for a bit before asking
+          # solves the problem.
+          sleep 5
+          gh run watch -R "$GITHUB_REPO" --exit-status --compact "$PRESIGN_WORKFLOW_RUNID"
+
+      - name: Check pre-sign release
+        id: presign-release
+        env:
+          PRESIGN_RELEASE_TAG: ${{ steps.setup.outputs.presign_release_tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          set -e
+          echo "release_info<<EOF" >> $GITHUB_OUTPUT
+          gh release view -R "$GITHUB_REPO" "$PRESIGN_RELEASE_TAG" --json url,assets >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Display pre-sign release link
+        env:
+          PRESIGN_RELEASE_URL: ${{ fromJSON(steps.presign-release.outputs.release_info).url }}
+        run: |
+          echo "Pre-sign release: $PRESIGN_RELEASE_URL" >> $GITHUB_STEP_SUMMARY
+
+      # TODO: do the offline sign here
+
+      - name: Run post-sign
+        id: postsign
+        env:
+          # We need a token with sufficient privilege to trigger a workflow dispatch.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Run it on the pre-sign branch. Usually, one would want to take the pre-sign branch, merge it back into
+          # main and run the post-sign from there. However, this is inconvenient for a testing flow so we just run it
+          # directly from the presign branch.
+          TESTING_BRANCH: ${{ steps.setup.outputs.presign_branch }}
+          PRESIGN_RELEASE_TAG: ${{ steps.setup.outputs.presign_release_tag }}
+          RELEASE_TAG: ${{ steps.setup.outputs.postsign_release_tag }}
+          CREATE_BRANCH: ${{ steps.setup.outputs.postsign_branch }}
+        run: |
+          set -e
+          echo "workflow_info<<EOF" >> $GITHUB_OUTPUT
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            "/repos/${{ github.repository }}/actions/workflows/post-sign-release.yml/dispatches" \
+            -f "ref=refs/heads/$TESTING_BRANCH" \
+            -f "inputs[presign_release_tag]=$PRESIGN_RELEASE_TAG" \
+            -f "inputs[release_tag]=$RELEASE_TAG" \
+            -f "inputs[create_branch]=$CREATE_BRANCH" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Display post-sign workflow link
+        env:
+          PRESIGN_WORKFLOW_URL: ${{ fromJSON(steps.postsign.outputs.workflow_info).html_url }}
+        run: |
+          echo "Post-sign release workflow: $PRESIGN_WORKFLOW_URL" >> $GITHUB_STEP_SUMMARY
+
+      - name: Wait for post-sign to finish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          POSTSIGN_WORKFLOW_RUNID: ${{ fromJSON(steps.postsign.outputs.workflow_info).workflow_run_id }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          # Sometimes, despite the REST API returning a URL and a run ID, immediately asking Github about
+          # the status of the run will fail with a 500 error. Experimentally, wait for a bit before asking
+          # solves the problem.
+          sleep 5
+          gh run watch -R "$GITHUB_REPO" --exit-status --compact "$POSTSIGN_WORKFLOW_RUNID"
+
+      - name: Check and display post-sign release
+        env:
+          POSTSIGN_RELEASE_TAG: ${{ steps.setup.outputs.postsign_release_tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          gh release view -R "$GITHUB_REPO" "$POSTSIGN_RELEASE_TAG"
