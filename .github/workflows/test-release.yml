@@ -1,0 +1,18 @@
+# Copyright lowRISC contributors (OpenTitan project).
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# This empty file is needed to satisfy Github Actions' rule that a workflow
+# must exist on the default (main) branch in order to run on other branches.
+# The primary use case for this workflow is to be triggered by trugger-test-release.yml
+
+name: OT SKU CI
+on: workflow_dispatch
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo '::error::This workflow cannot be run on the main branch'
+          exit 1

@@ -1,0 +1,92 @@
+# Copyright lowRISC contributors (OpenTitan project).
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# This file exists to make sure that this workflow is runnable from other branches.
+name: Trigger test release workflow
+on:
+  workflow_dispatch:
+    inputs:
+      # Inputs provided by lowrisc-ci GitHub app
+      repository:
+        description: Repository to check out.
+        default: lowRISC/ot-sku-testing
+        type: string
+      pull_request:
+        description: Pull request that triggers this workflow run (optional)
+        type: string
+      sha:
+        description: SHA to report status on
+        type: string
+      merge_sha:
+        description: SHA to run workflow on
+        type: string
+        default: main
+      # Additional inputs
+      testing_branch:
+        description: Branch name to use for testing
+        type: string
+      run_name:
+        description: Name of the triggered workflow run
+        type: string
+
+run-name: ${{ inputs.run_name }}
+
+# For CI triggered by pull requests, cancel the previous run.
+concurrency:
+  group: ot-sku-ci-${{ inputs.pull_request || inputs.branch || inputs.merge_sha }}
+  cancel-in-progress: true
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add summary about the job
+        run: |
+          if [[ -n "${{ inputs.pull_request }}" ]]; then
+            echo "Triggered by [#${{ inputs.pull_request }}](${{ github.server_url }}/${{ inputs.repository }}/pull/${{ inputs.pull_request }})" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [[ -n "${{ inputs.sha }}" ]]; then
+            echo '::notice title=[cross-repo-ci]metadata::{"repository":"${{ inputs.repository }}","sha":"${{ inputs.sha }}"}'
+            echo "Triggered on [${{ inputs.sha }}](${{ github.server_url }}/${{ inputs.repository }}/commit/${{ inputs.sha }})" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "Running on commit [${{ inputs.merge_sha }}](${{ github.server_url }}/${{ inputs.repository }}/commit/${{ inputs.merge_sha }})" >> $GITHUB_STEP_SUMMARY
+          echo "Requested testing branch [${{ inputs.testing_branch }}](${{ github.server_url }}/${{ github.repository }}/tree/${{ inputs.testing_branch }})" >> $GITHUB_STEP_SUMMARY
+
+  trigger_release_test:
+    name: Trigger test release workflow
+    runs-on: ubuntu-24.04
+    permissions:
+      # Used to trigger the test release flow.
+      actions: write
+    steps:
+      - name: Sync testing branch
+        env:
+          # We need a token with sufficient privilege to create a branch. The release token has such power.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          # Create a branch which matches with the sha of the requesting commit (from the ot-sku repository).
+          # It should be noted that this works because this workflow is triggered from ot-sku and
+          # this repository is a *fork* of ot-sku. Hence, any commit SHA of ot-sku is also a valid
+          # commit SHA in this repository.
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            "/repos/${{ github.repository }}/git/refs" \
+            -f "ref=refs/heads/${{ inputs.testing_branch }}" \
+            -f 'sha=${{ inputs.merge_sha }}'
+      - name: Trigger test release workflow on the testing branch
+        env:
+          # We need a token with sufficient privilege to trigger a workflow dispatch.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            "/repos/${{ github.repository }}/actions/workflows/test-release.yml/dispatches" \
+            -f "ref=refs/heads/${{ inputs.testing_branch }}" \
+            -f "inputs[testing_branch]=${{ inputs.testing_branch }}" \
+            | tee out.txt
+          echo "Test release workflow: $(jq --raw-output .html_url out.txt)" >> $GITHUB_STEP_SUMMARY
