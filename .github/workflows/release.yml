@@ -27,12 +27,12 @@ on:
         options:
           - pre-sign
           - post-sign
-        default: pre-sign # <<< RELEASE_TYPE >>>
+        default: post-sign # <<< RELEASE_TYPE >>>
       release_branch:
         description: Name of the release branch to create/update
         required: true
         type: string
-        default: '' # <<< RELEASE_BRANCH >>>
+        default: ot-sku-test-release-1c23ce109ee4ef9f38e5ce5447ffe40eba943bb8-run-1-release # <<< RELEASE_BRANCH >>>
       release_notes:
         description: GitHub release notes
         required: true
@@ -60,7 +60,7 @@ on:
         description: Git branch or commit hash to checkout (opentitan)
         required: true
         type: string
-        default: earlgrey_1.0.0 # <<< OT_REF >>>
+        default: a15e6f6c3b332854f9be5813ad73cf9d50a8f4fb # <<< OT_REF >>>
 
 jobs:
   release:
