@@ -27,10 +27,12 @@ hub_repo = repository_rule(
 # Therefore, it needs to remain a constant dictionary which can be parsed by the python ast module.
 _ARCHIVES = {
     "presign_perso": {
-        "url": "https://github.com/lowRISC/ot-sku/releases/download/FAKE_BUILD_20260518_rc00/presign_perso.tar.xz",
+        "url": "https://github.com/lowRISC/ot-sku-testing/releases/download/PRESIGN_RELEASE_OT-SKU-TEST-RELEASE-49A4C110488EE5A16B27FF68D02D087E876EA23E-RUN-1/presign_perso.tar.xz",
+        "sha256": "395e26ee46e12d52d76dd00871545bb3b378a307dd4863db3d7700558aa011db",
     },
     "presign_rom_ext": {
-        "url": "https://github.com/lowRISC/ot-sku/releases/download/FAKE_BUILD_20260518_rc00/presign_rom_ext.tar.xz",
+        "url": "https://github.com/lowRISC/ot-sku-testing/releases/download/PRESIGN_RELEASE_OT-SKU-TEST-RELEASE-49A4C110488EE5A16B27FF68D02D087E876EA23E-RUN-1/presign_rom_ext.tar.xz",
+        "sha256": "93c434c3ce34e7a322762bf21b1eef697631ad90e0e5582ddeb80a0a7dcc081d",
     },
     "perso_release": {
         "url": "https://github.com/lowRISC/ot-sku/releases/download/FAKE_RELEASE_20260518_rc00/perso_release.tar.xz",
