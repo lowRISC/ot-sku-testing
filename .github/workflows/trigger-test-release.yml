@@ -77,10 +77,13 @@ jobs:
             -f "ref=refs/heads/${{ inputs.testing_branch }}" \
             -f 'sha=${{ inputs.merge_sha }}'
       - name: Trigger test release workflow on the testing branch
+        id: trigger
         env:
           # We need a token with sufficient privilege to trigger a workflow dispatch.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -e
+          echo "workflow_info<<EOF" >> $GITHUB_OUTPUT
           gh api \
             --method POST \
             -H "Accept: application/vnd.github+json" \
@@ -88,5 +91,24 @@ jobs:
             "/repos/${{ github.repository }}/actions/workflows/test-release.yml/dispatches" \
             -f "ref=refs/heads/${{ inputs.testing_branch }}" \
             -f "inputs[testing_branch]=${{ inputs.testing_branch }}" \
-            | tee out.txt
-          echo "Test release workflow: $(jq --raw-output .html_url out.txt)" >> $GITHUB_STEP_SUMMARY
+            | tee -a $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Display workflow link
+        env:
+          WORKFLOW_URL: ${{ fromJSON(steps.trigger.outputs.workflow_info).html_url }}
+        run: |
+          echo "Release test workflow: $WORKFLOW_URL" >> $GITHUB_STEP_SUMMARY
+
+      - name: Wait for workflow to finish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_RUNID: ${{ fromJSON(steps.trigger.outputs.workflow_info).workflow_run_id }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          # Sometimes, despite the REST API returning a URL and a run ID, immediately asking Github about
+          # the status of the run will fail with a 500 error. Experimentally, wait for a bit before asking
+          # solves the problem.
+          sleep 5
+          gh run watch -R "$GITHUB_REPO" --exit-status --compact "$WORKFLOW_RUNID"
