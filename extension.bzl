@@ -35,10 +35,12 @@ _ARCHIVES = {
         "sha256": "6281c7de2a4f78fcdba308f298ef0f46dea80678b4cf03ff8278d227de505716",
     },
     "perso_release": {
-        "url": "https://github.com/lowRISC/ot-sku/releases/download/FAKE_RELEASE_20260518_rc00/perso_release.tar.xz",
+        "url": "https://github.com/lowRISC/ot-sku-testing/releases/download/FINAL_RELEASE_OT-SKU-TEST-RELEASE-1DD33B990A26536BFDA48AFEA06AB3F2F382F6C0-RUN-1/perso_release.tar.xz",
+        "sha256": "f358cf5b10d80cbf267344881bc5168ec614791b7bd77332298040d3f61c13ab",
     },
     "rom_ext_release": {
-        "url": "https://github.com/lowRISC/ot-sku/releases/download/FAKE_RELEASE_20260518_rc00/rom_ext_release.tar.xz",
+        "url": "https://github.com/lowRISC/ot-sku-testing/releases/download/FINAL_RELEASE_OT-SKU-TEST-RELEASE-1DD33B990A26536BFDA48AFEA06AB3F2F382F6C0-RUN-1/rom_ext_release.tar.xz",
+        "sha256": "860152ec674d8864fabd12a8a3f64c21406912d115c040e6eaeafeb569ad03ad",
     },
 }
 
